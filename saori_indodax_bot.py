@@ -5,16 +5,12 @@ import asyncio
 import json
 import logging
 from cachetools import TTLCache
-import pytz
 
 # Setup logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
-
-# Set zona waktu WIB
-wib = pytz.timezone('Asia/Jakarta')
 
 # Import telegram dengan error handling
 try:
@@ -23,8 +19,7 @@ try:
     logging.info("Telegram imports successful")
 except ImportError as e:
     logging.error(f"Telegram import error: {e}")
-    # Jangan instal di runtime; tambah di requirements.txt
-    raise
+    exit(1)
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
@@ -42,7 +37,7 @@ TOKEN = os.environ.get('BOT_TOKEN')
 if not TOKEN:
     logging.error("BOT_TOKEN tidak ditemukan di environment variables!")
     logging.info("Set BOT_TOKEN di Secrets tab")
-    exit()
+    exit(1)
 
 # Cache untuk API data (1 menit TTL)
 cache = TTLCache(maxsize=100, ttl=60)
@@ -156,7 +151,7 @@ async def price(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"📈 Tertinggi 24h: Rp {high_price}\n"
             f"📉 Terendah 24h: Rp {low_price}\n"
             f"📦 Volume 24h: Rp {volume}\n\n"
-            f"⏰ Diperbarui: {datetime.now(wib).strftime('%H:%M:%S %d-%m-%Y')}"  # Diperbaiki
+            f"⏰ Diperbarui: {datetime.datetime.now().strftime('%H:%M:%S')}"
         )
         await loading_msg.edit_text(msg, parse_mode="Markdown")
         
@@ -185,7 +180,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             msg += f"▫️ {pair.upper()}: Tidak tersedia\n"
     
-    msg += f"\n⏰ Diperbarui: {datetime.now(wib).strftime('%H:%M:%S %d-%m-%Y')}"  # Diperbaiki
+    msg += f"\n⏰ Diperbarui: {datetime.datetime.now().strftime('%H:%M:%S')}"
     
     if success_count == 0:
         msg = "❌ Gagal mengambil data semua coin. Coba lagi nanti."
@@ -231,7 +226,7 @@ async def market(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"💵 Buy Price: Rp {buy:,.0f}\n"
             f"💴 Sell Price: Rp {sell:,.0f}\n"
             f"📦 Volume 24h: Rp {volume}\n\n"
-            f"⏰ Diperbarui: {datetime.now(wib).strftime('%H:%M:%S %d-%m-%Y')}"  # Diperbaiki
+            f"⏰ Diperbarui: {datetime.datetime.now().strftime('%H:%M:%S')}"
         )
         await loading_msg.edit_text(msg, parse_mode="Markdown")
         
@@ -298,7 +293,7 @@ async def check_alerts(app: Application):
                             f"🚨 *ALERT HARGA!* 🚨\n\n"
                             f"💰 {pair.upper()} mencapai Rp {formatted_current}\n"
                             f"🎯 Target Anda: Rp {formatted_target}\n\n"
-                            f"⏰ {datetime.now(wib).strftime('%d/%m/%Y %H:%M:%S')}"  # Diperbaiki
+                            f"⏰ {datetime.datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"
                         ),
                         parse_mode="Markdown"
                     )
@@ -335,8 +330,12 @@ def main():
     logging.info(f"Token: {'Found' if TOKEN else 'Missing'}")
     
     try:
-        # Create application
-        app = Application.builder().token(TOKEN).build()
+        # Create application - Fixed untuk compatibility
+        app = (
+            Application.builder()
+            .token(TOKEN)
+            .build()
+        )
         logging.info("Bot application created successfully")
 
         # Add handlers
