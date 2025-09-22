@@ -2,6 +2,7 @@ from flask import Flask
 from threading import Thread
 import time
 import logging
+import os
 
 # Setup logging
 logging.basicConfig(
@@ -31,11 +32,14 @@ def health():
     }
 
 def run():
+    # Railway menyediakan PORT via environment variable
+    port = int(os.environ.get('PORT', 8080))
     retries = 3
+    
     for attempt in range(retries):
         try:
-            logging.info("Starting Flask keep-alive server on port 8080...")
-            app.run(host='0.0.0.0', port=8080, debug=False)
+            logging.info(f"Starting Flask keep-alive server on port {port}...")
+            app.run(host='0.0.0.0', port=port, debug=False)
             break
         except Exception as e:
             logging.error(f"Keep-alive server error (attempt {attempt+1}/{retries}): {e}")
@@ -49,5 +53,6 @@ def keep_alive():
     t = Thread(target=run)
     t.daemon = True
     t.start()
-    logging.info("Keep-alive server started on port 8080")
+    port = int(os.environ.get('PORT', 8080))
+    logging.info(f"Keep-alive server started on port {port}")
     return t
