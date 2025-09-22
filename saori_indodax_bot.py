@@ -53,9 +53,9 @@ alerts = {}
 
 # Alternative API endpoints untuk fallback
 INDODAX_ENDPOINTS = [
-    "https://indodax.com/api/{}/ticker",
-    "https://indodax.com/tapi/{}/ticker",
-    "https://api.indodax.com/{}/ticker"
+    "https://indodax.com/api/ticker",
+    "https://indodax.com/tapi/ticker",
+    "https://api.indodax.com/ticker"
 ]
 
 # --- Fungsi Start ---
@@ -471,4 +471,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
