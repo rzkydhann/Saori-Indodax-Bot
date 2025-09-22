@@ -61,7 +61,7 @@ INDODAX_ENDPOINTS = [
 # --- Fungsi Start ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = (
-        "👋 Selamat datang di *Indodax Crypto Bot*!\n\n"
+        "👋 Selamat datang di *Saori Indodax Crypto Bot*!\n\n"
         "Perintah yang tersedia:\n"
         "🔹 /price <pair> → Cek harga (contoh: /price btcidr)\n"
         "🔹 /top → Lihat koin populer\n"
@@ -400,7 +400,7 @@ async def check_alerts(app: Application):
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     pairs_list = ", ".join(VALID_PAIRS)
     msg = (
-        "🤖 *Bantuan Bot Indodax*\n\n"
+        "🤖 *Bantuan Bot Saori Indodax*\n\n"
         "📋 *Perintah yang tersedia:*\n"
         "• /start - Memulai bot\n"
         "• /price <pair> - Cek harga crypto\n"
@@ -471,3 +471,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
