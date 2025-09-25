@@ -5,6 +5,7 @@ import asyncio
 import json
 import logging
 from cachetools import TTLCache
+import pytz
 
 # Setup logging
 logging.basicConfig(
@@ -57,12 +58,27 @@ VALID_PAIRS = {
 # Simpan alert harga
 alerts = {}
 
+# Timezone Indonesia
+WIB = pytz.timezone('Asia/Jakarta')  # Waktu Indonesia Barat (GMT+7)
+
+# Alternative API endpoints untuk fallback
 # Alternative API endpoints untuk fallback
 INDODAX_ENDPOINTS = [
     "https://indodax.com/api/ticker",
     "https://indodax.com/tapi/ticker",
     "https://api.indodax.com/ticker"
 ]
+
+# Timezone Indonesia
+WIB = pytz.timezone('Asia/Jakarta')  # Waktu Indonesia Barat (GMT+7)
+
+def get_current_time():
+    """Get current time in Indonesian timezone"""
+    return datetime.datetime.now(WIB).strftime('%d/%m/%Y %H:%M:%S WIB')
+
+def get_short_time():
+    """Get current time in short format (HH:MM:SS WIB)"""
+    return datetime.datetime.now(WIB).strftime('%H:%M:%S WIB')
 
 # --- Fungsi untuk membuat menu utama ---
 def get_main_menu():
@@ -269,7 +285,7 @@ async def show_price(query, pair):
             f"📈 Tertinggi 24h: Rp {high_price}\n"
             f"📉 Terendah 24h: Rp {low_price}\n"
             f"📦 Volume 24h: Rp {volume}\n\n"
-            f"⏰ Diperbarui: {datetime.datetime.now().strftime('%H:%M:%S')}"
+            f"⏰ Diperbarui: {get_short_time()}"
         )
         
         keyboard = [
@@ -323,7 +339,7 @@ async def show_market_info(query, pair):
             f"💵 Buy Price: Rp {buy:,.0f}\n"
             f"💴 Sell Price: Rp {sell:,.0f}\n"
             f"📦 Volume 24h: Rp {volume}\n\n"
-            f"⏰ Diperbarui: {datetime.datetime.now().strftime('%H:%M:%S')}"
+            f"⏰ Diperbarui: {get_short_time()}"
         )
         
         keyboard = [
@@ -392,7 +408,7 @@ async def show_top_coins(query):
             msg += f"▫️ {crypto_name}: Tidak tersedia\n"
     
     if success_count > 0:
-        msg += f"\n⏰ Diperbarui: {datetime.datetime.now().strftime('%H:%M:%S')}"
+        msg += f"\n⏰ Diperbarui: {get_short_time()}"
         msg += f"\n📊 Berhasil: {success_count}/{len(pairs)} coin"
     else:
         msg = (
@@ -534,7 +550,7 @@ async def price(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"📈 Tertinggi 24h: Rp {high_price}\n"
             f"📉 Terendah 24h: Rp {low_price}\n"
             f"📦 Volume 24h: Rp {volume}\n\n"
-            f"⏰ Diperbarui: {datetime.datetime.now().strftime('%H:%M:%S')}\n\n"
+            f"⏰ Diperbarui: {get_short_time()}\n\n"
             f"💡 Gunakan /start untuk menu interaktif"
         )
         await loading_msg.edit_text(msg, parse_mode="Markdown")
@@ -568,7 +584,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
             msg += f"▫️ {pair.upper()}: Tidak tersedia\n"
     
     if success_count > 0:
-        msg += f"\n⏰ Diperbarui: {datetime.datetime.now().strftime('%H:%M:%S')}"
+        msg += f"\n⏰ Diperbarui: {get_short_time()}"
         msg += f"\n📊 Berhasil: {success_count}/{len(pairs)} coin"
         msg += f"\n\n💡 Gunakan /start untuk menu interaktif"
     else:
@@ -621,7 +637,7 @@ async def market(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"💵 Buy Price: Rp {buy:,.0f}\n"
             f"💴 Sell Price: Rp {sell:,.0f}\n"
             f"📦 Volume 24h: Rp {volume}\n\n"
-            f"⏰ Diperbarui: {datetime.datetime.now().strftime('%H:%M:%S')}\n\n"
+            f"⏰ Diperbarui: {get_short_time()}\n\n"
             f"💡 Gunakan /start untuk menu interaktif"
         )
         await loading_msg.edit_text(msg, parse_mode="Markdown")
@@ -739,7 +755,7 @@ async def check_alerts(app: Application):
                             f"🚨 *ALERT HARGA!* 🚨\n\n"
                             f"💰 {pair_name} mencapai Rp {formatted_current}\n"
                             f"🎯 Target Anda: Rp {formatted_target}\n\n"
-                            f"⏰ {datetime.datetime.now().strftime('%d/%m/%Y %H:%M:%S')}\n\n"
+                            f"⏰ {get_current_time()}\n\n"
                             f"💡 Gunakan /start untuk menu interaktif"
                         ),
                         parse_mode="Markdown"
