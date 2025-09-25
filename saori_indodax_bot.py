@@ -59,18 +59,14 @@ VALID_PAIRS = {
 alerts = {}
 
 # Timezone Indonesia
-WIB = pytz.timezone('Asia/Jakarta')  # Waktu Indonesia Barat (GMT+7)
+WIB = pytz.timezone('Asia/Jakarta')
 
-# Alternative API endpoints untuk fallback
-# Alternative API endpoints untuk fallback
+# FIXED: Alternative API endpoints dengan format yang benar
 INDODAX_ENDPOINTS = [
     "https://indodax.com/api/ticker",
-    "https://indodax.com/tapi/ticker",
+    "https://indodax.com/tapi/ticker", 
     "https://api.indodax.com/ticker"
 ]
-
-# Timezone Indonesia
-WIB = pytz.timezone('Asia/Jakarta')  # Waktu Indonesia Barat (GMT+7)
 
 def get_current_time():
     """Get current time in Indonesian timezone"""
@@ -122,6 +118,141 @@ def get_pair_menu(action_type):
     keyboard.append([InlineKeyboardButton("🔙 Kembali", callback_data="back_to_main")])
     
     return InlineKeyboardMarkup(keyboard)
+
+# FIXED: Fungsi helper untuk API call yang diperbaiki
+def get_ticker_data(pair):
+    """Helper function untuk get data dari API Indodax dengan cache dan fallback endpoints"""
+    if pair not in VALID_PAIRS:
+        logging.warning(f"Invalid pair requested: {pair}")
+        return None
+
+    # Cache key yang lebih spesifik
+    cache_key = f"{pair}_ticker"
+    if cache_key in cache:
+        logging.info(f"Using cached data for {pair}")
+        return cache[cache_key]
+
+    # Try multiple endpoints dengan format URL yang benar
+    for i, base_endpoint in enumerate(INDODAX_ENDPOINTS):
+        try:
+            # FIXED: Tidak ada format string, langsung tambahkan parameter
+            url = f"{base_endpoint}/{pair}"
+            logging.info(f"Trying endpoint {i+1}: {url}")
+            
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Accept': 'application/json',
+                'Accept-Language': 'id-ID,id;q=0.9,en;q=0.8',
+                'Cache-Control': 'no-cache'
+            }
+            
+            response = requests.get(url, timeout=15, headers=headers)
+            response.raise_for_status()
+            
+            data = response.json()
+            logging.debug(f"API Response for {pair}: {json.dumps(data, indent=2)}")
+            
+            # FIXED: Parsing yang lebih robust
+            ticker_data = None
+            
+            # Format 1: Response memiliki field 'ticker'
+            if 'ticker' in data and data['ticker'] and isinstance(data['ticker'], dict):
+                ticker_data = data['ticker']
+            
+            # Format 2: Response langsung berupa ticker data
+            elif 'last' in data and data['last']:
+                ticker_data = data
+            
+            # Format 3: Response berupa array atau nested structure
+            elif isinstance(data, dict):
+                # Cari ticker data dalam nested structure
+                for key, value in data.items():
+                    if isinstance(value, dict) and 'last' in value:
+                        ticker_data = value
+                        break
+            
+            if ticker_data and 'last' in ticker_data and ticker_data['last']:
+                # Validasi data penting
+                required_fields = ['last']
+                if all(field in ticker_data for field in required_fields):
+                    cache[cache_key] = ticker_data
+                    logging.info(f"Successfully got data for {pair} from endpoint {i+1}")
+                    return ticker_data
+                else:
+                    logging.warning(f"Missing required fields in response for {pair}")
+            else:
+                logging.warning(f"No valid ticker data found for {pair} in response: {data}")
+            
+        except requests.exceptions.Timeout:
+            logging.error(f"Timeout for endpoint {i+1}: {url}")
+            continue
+        except requests.exceptions.ConnectionError:
+            logging.error(f"Connection error for endpoint {i+1}")
+            continue
+        except requests.exceptions.HTTPError as e:
+            logging.error(f"HTTP Error {e.response.status_code} for endpoint {i+1}")
+            continue
+        except json.JSONDecodeError as e:
+            logging.error(f"Invalid JSON response from endpoint {i+1}: {e}")
+            continue
+        except Exception as e:
+            logging.error(f"Unexpected error for endpoint {i+1}: {str(e)}")
+            continue
+    
+    logging.error(f"All endpoints failed for {pair}")
+    return None
+
+# FIXED: Fungsi get_all_tickers untuk mendapatkan semua data sekaligus
+def get_all_tickers():
+    """Get all ticker data sekaligus untuk efisiensi"""
+    cache_key = "all_tickers"
+    if cache_key in cache:
+        logging.info("Using cached all tickers data")
+        return cache[cache_key]
+
+    for i, base_endpoint in enumerate(INDODAX_ENDPOINTS):
+        try:
+            # Endpoint untuk mendapatkan semua ticker sekaligus
+            url = base_endpoint  # Tanpa specific pair
+            logging.info(f"Trying all tickers endpoint {i+1}: {url}")
+            
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Accept': 'application/json',
+                'Accept-Language': 'id-ID,id;q=0.9,en;q=0.8',
+                'Cache-Control': 'no-cache'
+            }
+            
+            response = requests.get(url, timeout=15, headers=headers)
+            response.raise_for_status()
+            
+            data = response.json()
+            
+            # Parse all tickers data
+            all_tickers = {}
+            
+            if isinstance(data, dict):
+                # Format: {"ticker": {"btcidr": {...}, "ethidr": {...}}}
+                if 'ticker' in data and isinstance(data['ticker'], dict):
+                    all_tickers = data['ticker']
+                # Format: {"btcidr": {...}, "ethidr": {...}}
+                else:
+                    # Filter hanya pair yang valid
+                    for pair in VALID_PAIRS.keys():
+                        if pair in data and isinstance(data[pair], dict) and 'last' in data[pair]:
+                            all_tickers[pair] = data[pair]
+            
+            if all_tickers:
+                cache[cache_key] = all_tickers
+                logging.info(f"Successfully got all tickers from endpoint {i+1}, found {len(all_tickers)} pairs")
+                return all_tickers
+            
+        except Exception as e:
+            logging.error(f"Error getting all tickers from endpoint {i+1}: {str(e)}")
+            continue
+    
+    logging.warning("Failed to get all tickers, falling back to individual requests")
+    return None
 
 # --- Fungsi Start ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -183,72 +314,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data.startswith("alert_"):
         pair = data.replace("alert_", "")
         await show_alert_setup(query, pair)
-
-# --- Fungsi helper untuk API call dengan multiple endpoints ---
-def get_ticker_data(pair):
-    """Helper function untuk get data dari API Indodax dengan cache dan fallback endpoints"""
-    if pair not in VALID_PAIRS:
-        logging.warning(f"Invalid pair requested: {pair}")
-        return None
-
-    if pair in cache:
-        logging.info(f"Using cached data for {pair}")
-        return cache[pair]
-
-    # Try multiple endpoints
-    for endpoint_template in INDODAX_ENDPOINTS:
-        try:
-            url = endpoint_template.format(pair)
-            logging.info(f"Trying endpoint: {url}")
-            
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Accept': 'application/json',
-                'Accept-Language': 'id-ID,id;q=0.9,en;q=0.8',
-                'Cache-Control': 'no-cache'
-            }
-            
-            response = requests.get(url, timeout=15, headers=headers)
-            response.raise_for_status()
-            
-            data = response.json()
-            logging.debug(f"API Response for {pair}: {data}")
-            
-            # Check if response has valid ticker data
-            if 'ticker' in data and data['ticker']:
-                ticker_data = data['ticker']
-                # Validate required fields
-                if 'last' in ticker_data and ticker_data['last']:
-                    cache[pair] = ticker_data
-                    logging.info(f"Successfully got data for {pair} from {url}")
-                    return ticker_data
-            
-            # If no ticker field, maybe direct response
-            elif 'last' in data and data['last']:
-                cache[pair] = data
-                logging.info(f"Successfully got direct data for {pair} from {url}")
-                return data
-                
-            logging.warning(f"Invalid response format from {url}: {data}")
-            
-        except requests.exceptions.Timeout:
-            logging.error(f"Timeout for endpoint {url}")
-            continue
-        except requests.exceptions.ConnectionError:
-            logging.error(f"Connection error for endpoint {url}")
-            continue
-        except requests.exceptions.HTTPError as e:
-            logging.error(f"HTTP Error {e.response.status_code} for {url}")
-            continue
-        except json.JSONDecodeError as e:
-            logging.error(f"Invalid JSON response from {url}: {e}")
-            continue
-        except Exception as e:
-            logging.error(f"Unexpected error for {url}: {str(e)}")
-            continue
-    
-    logging.error(f"All endpoints failed for {pair}")
-    return None
 
 # --- Fungsi show price melalui callback ---
 async def show_price(query, pair):
@@ -381,9 +446,9 @@ async def show_alert_setup(query, pair):
     
     await query.edit_message_text(msg, parse_mode="Markdown", reply_markup=reply_markup)
 
-# --- Fungsi show top coins ---
+# FIXED: Fungsi show top coins yang diperbaiki
 async def show_top_coins(query):
-    """Tampilkan top coins"""
+    """Tampilkan top coins dengan data yang benar"""
     pairs = ["btcidr", "ethidr", "dogidr", "xrpidr", "adaidr"]
     
     await query.edit_message_text("⏳ Mengambil data top coins...")
@@ -391,21 +456,41 @@ async def show_top_coins(query):
     msg = "🔥 *Top Coins di Indodax:*\n\n"
     success_count = 0
     
+    # FIXED: Coba ambil semua data sekaligus dulu
+    all_tickers = get_all_tickers()
+    
     for pair in pairs:
-        ticker = get_ticker_data(pair)
+        ticker = None
+        
+        # Coba dari all_tickers dulu
+        if all_tickers and pair in all_tickers:
+            ticker = all_tickers[pair]
+            logging.info(f"Using bulk data for {pair}")
+        else:
+            # Fallback ke individual request
+            ticker = get_ticker_data(pair)
+            logging.info(f"Using individual request for {pair}")
+        
         if ticker:
             try:
-                price_value = f"{float(ticker['last']):,.0f}"
+                price_value = float(ticker['last'])
+                formatted_price = f"{price_value:,.0f}"
                 pair_name = VALID_PAIRS.get(pair, pair.upper())
                 crypto_name = pair_name.split('(')[1].replace(')', '') if '(' in pair_name else pair.upper()
-                msg += f"▫️ {crypto_name}: Rp {price_value}\n"
+                
+                msg += f"▫️ {crypto_name}: Rp {formatted_price}\n"
                 success_count += 1
-            except (KeyError, ValueError):
+                
+                logging.info(f"Success parsing {pair}: {price_value}")
+                
+            except (KeyError, ValueError, TypeError) as e:
                 crypto_name = VALID_PAIRS.get(pair, pair.upper()).split('(')[1].replace(')', '')
-                msg += f"▫️ {crypto_name}: Error parsing\n"
+                msg += f"▫️ {crypto_name}: Error parsing data\n"
+                logging.error(f"Error parsing {pair}: {e}, data: {ticker}")
         else:
             crypto_name = VALID_PAIRS.get(pair, pair.upper()).split('(')[1].replace(')', '')
-            msg += f"▫️ {crypto_name}: Tidak tersedia\n"
+            msg += f"▫️ {crypto_name}: Data tidak tersedia\n"
+            logging.warning(f"No data available for {pair}")
     
     if success_count > 0:
         msg += f"\n⏰ Diperbarui: {get_short_time()}"
@@ -413,7 +498,8 @@ async def show_top_coins(query):
     else:
         msg = (
             "❌ Gagal mengambil data semua coin.\n\n"
-            f"Kemungkinan API Indodax sedang bermasalah."
+            f"Kemungkinan API Indodax sedang bermasalah.\n"
+            f"Coba lagi dalam beberapa saat."
         )
     
     keyboard = [
@@ -432,9 +518,12 @@ async def show_api_status(query):
     status_msg = "📡 *API Status Check*\n\n"
     working_endpoints = 0
     
-    for i, endpoint_template in enumerate(INDODAX_ENDPOINTS, 1):
+    for i, endpoint in enumerate(INDODAX_ENDPOINTS, 1):
         try:
-            url = endpoint_template.format('btcidr')
+            # Test dengan btcidr
+            url = f"{endpoint}/btcidr"
+            logging.info(f"Testing endpoint {i}: {url}")
+            
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
                 'Accept': 'application/json'
@@ -445,19 +534,30 @@ async def show_api_status(query):
             if response.status_code == 200:
                 try:
                     data = response.json()
-                    if ('ticker' in data and data['ticker']) or 'last' in data:
+                    # Check if valid ticker data
+                    has_valid_data = False
+                    
+                    if 'ticker' in data and data['ticker'] and 'last' in data['ticker']:
+                        has_valid_data = True
+                    elif 'last' in data:
+                        has_valid_data = True
+                    
+                    if has_valid_data:
                         status_msg += f"✅ Endpoint {i}: Working\n"
                         working_endpoints += 1
                     else:
-                        status_msg += f"⚠️ Endpoint {i}: Invalid response\n"
-                except:
+                        status_msg += f"⚠️ Endpoint {i}: Invalid response format\n"
+                        
+                except json.JSONDecodeError:
                     status_msg += f"⚠️ Endpoint {i}: Invalid JSON\n"
             else:
                 status_msg += f"❌ Endpoint {i}: HTTP {response.status_code}\n"
+                
         except requests.exceptions.Timeout:
             status_msg += f"⏰ Endpoint {i}: Timeout\n"
         except Exception as e:
             status_msg += f"❌ Endpoint {i}: Error\n"
+            logging.error(f"Endpoint {i} error: {str(e)}")
     
     status_msg += f"\n📊 Working endpoints: {working_endpoints}/{len(INDODAX_ENDPOINTS)}\n"
     
@@ -505,7 +605,7 @@ async def show_help(query):
     
     await query.edit_message_text(msg, parse_mode="Markdown", reply_markup=reply_markup)
 
-# --- Fungsi command handler lama (untuk backward compatibility) ---
+# --- Command handlers lama (untuk backward compatibility) ---
 async def price(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if len(context.args) == 0:
         pairs_list = "\n".join([f"• {pair}" for pair in VALID_PAIRS.keys()])
@@ -562,7 +662,6 @@ async def price(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"Gunakan /start untuk menu interaktif"
         )
 
-# Fungsi command handler lainnya tetap sama seperti sebelumnya...
 async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
     pairs = ["btcidr", "ethidr", "dogidr", "xrpidr", "adaidr"]
     
@@ -571,17 +670,34 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = "🔥 *Top Coin di Indodax:*\n\n"
     success_count = 0
     
+    # FIXED: Gunakan fungsi yang sama seperti callback handler
+    all_tickers = get_all_tickers()
+    
     for pair in pairs:
-        ticker = get_ticker_data(pair)
+        ticker = None
+        
+        # Coba dari all_tickers dulu
+        if all_tickers and pair in all_tickers:
+            ticker = all_tickers[pair]
+        else:
+            # Fallback ke individual request
+            ticker = get_ticker_data(pair)
+        
         if ticker:
             try:
-                price_value = f"{float(ticker['last']):,.0f}"
-                msg += f"▫️ {pair.upper()}: Rp {price_value}\n"
+                price_value = float(ticker['last'])
+                formatted_price = f"{price_value:,.0f}"
+                crypto_name = VALID_PAIRS.get(pair, pair.upper()).split('(')[1].replace(')', '')
+                
+                msg += f"▫️ {crypto_name}: Rp {formatted_price}\n"
                 success_count += 1
-            except (KeyError, ValueError):
-                msg += f"▫️ {pair.upper()}: Error parsing\n"
+                
+            except (KeyError, ValueError, TypeError):
+                crypto_name = VALID_PAIRS.get(pair, pair.upper()).split('(')[1].replace(')', '')
+                msg += f"▫️ {crypto_name}: Error parsing\n"
         else:
-            msg += f"▫️ {pair.upper()}: Tidak tersedia\n"
+            crypto_name = VALID_PAIRS.get(pair, pair.upper()).split('(')[1].replace(')', '')
+            msg += f"▫️ {crypto_name}: Tidak tersedia\n"
     
     if success_count > 0:
         msg += f"\n⏰ Diperbarui: {get_short_time()}"
@@ -693,9 +809,9 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     status_msg = "📡 *API Status Check*\n\n"
     working_endpoints = 0
     
-    for i, endpoint_template in enumerate(INDODAX_ENDPOINTS, 1):
+    for i, endpoint in enumerate(INDODAX_ENDPOINTS, 1):
         try:
-            url = endpoint_template.format('btcidr')
+            url = f"{endpoint}/btcidr"
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
                 'Accept': 'application/json'
@@ -706,7 +822,14 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if response.status_code == 200:
                 try:
                     data = response.json()
-                    if ('ticker' in data and data['ticker']) or 'last' in data:
+                    has_valid_data = False
+                    
+                    if 'ticker' in data and data['ticker'] and 'last' in data['ticker']:
+                        has_valid_data = True
+                    elif 'last' in data:
+                        has_valid_data = True
+                    
+                    if has_valid_data:
                         status_msg += f"✅ Endpoint {i}: Working\n"
                         working_endpoints += 1
                     else:
