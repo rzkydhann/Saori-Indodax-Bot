@@ -449,7 +449,7 @@ async def show_alert_setup(query, pair):
 # FIXED: Fungsi show top coins yang diperbaiki
 async def show_top_coins(query):
     """Tampilkan top coins dengan data yang benar"""
-    pairs = ["btcidr", "ethidr", "dogidr", "xrpidr", "adaidr"]
+    pairs = ["btcidr", "ethidr", "dogeidr", "xrpidr", "adaidr"]
     
     await query.edit_message_text("⏳ Mengambil data top coins...")
     
@@ -663,7 +663,7 @@ async def price(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    pairs = ["btcidr", "ethidr", "dogidr", "xrpidr", "adaidr"]
+    pairs = ["btcidr", "ethidr", "dogeidr", "xrpidr", "adaidr"]
     
     loading_msg = await update.message.reply_text("⏳ Mengambil data top coins...")
     
@@ -973,4 +973,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
