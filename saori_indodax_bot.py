@@ -12,52 +12,37 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
-# Import telegram dengan error handling
+# Import telegram
 try:
     from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
     from telegram.ext import Application, CommandHandler, ContextTypes
-    logging.info("Telegram imports successful")
 except ImportError as e:
-    logging.error(f"Telegram import error: {e}")
+    logging.error(f"Telegram import error: {e}. Pastikan library sudah terinstal.")
     exit(1)
 
+# Import scheduler
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-# Import keep_alive dengan error handling
+# Import keep_alive (opsional)
 try:
     from keep_alive import keep_alive
-    logging.info("Keep-alive import successful")
 except ImportError:
-    logging.warning("Keep-alive not found, creating placeholder...")
     def keep_alive():
-        logging.info("Keep-alive placeholder active")
+        pass # Buat fungsi kosong jika file tidak ada
 
-# Token dari environment variable
+# --- Konfigurasi Awal ---
 TOKEN = os.environ.get('BOT_TOKEN')
 if not TOKEN:
     logging.error("BOT_TOKEN tidak ditemukan di environment variables!")
     exit(1)
 
-# Cache untuk API data (1 menit TTL)
 cache = TTLCache(maxsize=100, ttl=60)
-
-# Daftar pair yang valid
-VALID_PAIRS = [
-    "btcidr", "ethidr", "ltcidr", "xrpidr", "adaidr",
-    "dogidr", "shibidr", "maticidr"
-]
-
-# Simpan alert harga
+VALID_PAIRS = ["btcidr", "ethidr", "ltcidr", "xrpidr", "adaidr", "dogidr", "shibidr", "maticidr"]
 alerts = {}
+INDODAX_API_URL = "https://indodax.com/api/ticker"
 
-# API endpoints
-INDODAX_ENDPOINTS = [
-    "https://indodax.com/api/ticker"
-]
-
-# --- Fungsi untuk membuat menu tombol ---
+# --- Fungsi Menu Tombol ---
 def get_menu_keyboard():
-    """Membuat keyboard markup untuk menu perintah"""
     keyboard = [
         [KeyboardButton("/price"), KeyboardButton("/top")],
         [KeyboardButton("/market"), KeyboardButton("/alert")],
@@ -70,26 +55,17 @@ def get_menu_keyboard():
         input_field_placeholder="Pilih perintah..."
     )
 
-# --- Fungsi Start ---
+# --- Fungsi Inti ---
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = (
-        "👋 Selamat datang di *Saori Indodax Crypto Bot*!\n\n"
-        "Gunakan menu tombol di bawah untuk berinteraksi dengan bot."
-    )
-    await update.message.reply_text(
-        msg,
-        parse_mode="Markdown",
-        reply_markup=get_menu_keyboard()
-    )
+    msg = "👋 Selamat datang di *Saori Indodax Crypto Bot*!\n\nGunakan menu tombol di bawah untuk memulai."
+    await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=get_menu_keyboard())
 
-# --- Fungsi helper API Call (Non-Blocking) ---
 async def get_ticker_data(pair: str):
-    if pair not in VALID_PAIRS:
-        return None
-    if pair in cache:
-        return cache[pair]
+    if pair not in VALID_PAIRS: return None
+    if pair in cache: return cache[pair]
 
-    url = f"{INDODAX_ENDPOINTS[0]}/{pair}"
+    url = f"{INDODAX_API_URL}/{pair}"
     
     def sync_request():
         try:
@@ -107,14 +83,9 @@ async def get_ticker_data(pair: str):
         return data['ticker']
     return None
 
-# --- Fungsi cek harga ---
 async def price(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
-        await update.message.reply_text(
-            "Gunakan format: `/price <pair>`\nContoh: `/price btcidr`",
-            parse_mode="Markdown",
-            reply_markup=get_menu_keyboard()
-        )
+        await update.message.reply_text("Gunakan format: `/price <pair>`", parse_mode="Markdown", reply_markup=get_menu_keyboard())
         return
     
     pair = context.args[0].lower()
@@ -132,7 +103,6 @@ async def price(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await loading_msg.edit_text(f"❌ Gagal mengambil data untuk {pair.upper()}.", reply_markup=get_menu_keyboard())
 
-# --- Fungsi Top coin ---
 async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
     pairs = ["btcidr", "ethidr", "dogidr", "shibidr", "maticidr"]
     loading_msg = await update.message.reply_text("⏳ Mengambil data top coins...")
@@ -150,19 +120,13 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             msg += f"▪️ {pair.upper()}: Gagal dimuat\n"
     
-    if success_count == 0:
-        msg = "❌ Gagal mengambil semua data top coin."
+    if success_count == 0: msg = "❌ Gagal mengambil semua data top coin."
 
     await loading_msg.edit_text(msg, parse_mode="Markdown", reply_markup=get_menu_keyboard())
 
-# --- Fungsi Market Info ---
 async def market(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
-        await update.message.reply_text(
-            "Gunakan format: `/market <pair>`\nContoh: `/market btcidr`",
-            parse_mode="Markdown",
-            reply_markup=get_menu_keyboard()
-        )
+        await update.message.reply_text("Gunakan format: `/market <pair>`", parse_mode="Markdown", reply_markup=get_menu_keyboard())
         return
 
     pair = context.args[0].lower()
@@ -176,97 +140,66 @@ async def market(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if ticker:
         high = f"{float(ticker.get('high', 0)):,.0f}"
         low = f"{float(ticker.get('low', 0)):,.0f}"
-        vol = f"{float(ticker.get(f'vol_{pair.replace("idr", "")}', 0)):,.2f}"
+
+        # --- INI BAGIAN YANG DIPERBAIKI ---
+        coin_name = pair.replace("idr", "")
+        vol_key = f"vol_{coin_name}"
+        vol_value = float(ticker.get(vol_key, 0))
+        vol_formatted = f"{vol_value:,.2f}"
+        
         msg = (
             f"📊 *Market {pair.upper()}*\n\n"
             f"📈 Tertinggi 24j: Rp {high}\n"
             f"📉 Terendah 24j: Rp {low}\n"
-            f"📦 Volume: {vol} {pair.replace('idr','').upper()}"
+            f"📦 Volume: {vol_formatted} {coin_name.upper()}"
         )
         await loading_msg.edit_text(msg, parse_mode="Markdown", reply_markup=get_menu_keyboard())
     else:
         await loading_msg.edit_text(f"❌ Gagal mengambil market data untuk {pair.upper()}.", reply_markup=get_menu_keyboard())
         
-# --- Fungsi Alert ---
 async def alert(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if len(context.args) < 2:
-        await update.message.reply_text(
-            "Gunakan format: `/alert <pair> <harga>`\nContoh: `/alert btcidr 1000000000`",
-            parse_mode="Markdown", reply_markup=get_menu_keyboard()
-        )
+        await update.message.reply_text("Gunakan format: `/alert <pair> <harga>`", parse_mode="Markdown", reply_markup=get_menu_keyboard())
         return
     
     pair = context.args[0].lower()
-    try:
-        target_price = float(context.args[1])
+    try: target_price = float(context.args[1])
     except ValueError:
         await update.message.reply_text("Harga harus berupa angka.", reply_markup=get_menu_keyboard())
         return
     
     user_id = update.message.chat_id
     alerts[user_id] = {'pair': pair, 'price': target_price}
-    
-    await update.message.reply_text(
-        f"🔔 Alert terpasang untuk {pair.upper()} pada harga Rp {target_price:,.0f}",
-        reply_markup=get_menu_keyboard()
-    )
+    await update.message.reply_text(f"🔔 Alert terpasang untuk {pair.upper()} pada harga Rp {target_price:,.0f}", reply_markup=get_menu_keyboard())
 
-# --- Fungsi cek alert harga ---
 async def check_alerts(context: ContextTypes.DEFAULT_TYPE):
-    if not alerts:
-        return
+    if not alerts: return
     
     unique_pairs = {a['pair'] for a in alerts.values()}
-    price_tasks = {pair: get_ticker_data(pair) for pair in unique_pairs}
-    
-    current_prices = {}
-    for pair, task in price_tasks.items():
-        current_prices[pair] = await task
+    for pair in unique_pairs:
+        ticker = await get_ticker_data(pair)
+        if ticker:
+            current_price = float(ticker['last'])
+            for user_id, alert_info in list(alerts.items()):
+                if alert_info['pair'] == pair and current_price >= alert_info['price']:
+                    await context.bot.send_message(user_id, f"🚨 *ALERT HARGA* 🚨\n\n{pair.upper()} telah mencapai target Anda!", parse_mode="Markdown", reply_markup=get_menu_keyboard())
+                    del alerts[user_id]
 
-    for user_id, alert_info in list(alerts.items()):
-        pair = alert_info['pair']
-        ticker = current_prices.get(pair)
-        if ticker and float(ticker['last']) >= alert_info['price']:
-            await context.bot.send_message(
-                user_id,
-                f"🚨 *ALERT HARGA* 🚨\n\n{pair.upper()} telah mencapai target harga Anda!",
-                parse_mode="Markdown", reply_markup=get_menu_keyboard()
-            )
-            del alerts[user_id]
-
-# --- Fungsi API Status ---
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    url = f"{INDODAX_ENDPOINTS[0]}/btcidr"
     loading_msg = await update.message.reply_text("⏳ Cek status API Indodax...")
-    
-    def sync_request():
-        try:
-            r = requests.get(url, timeout=8)
-            return r.status_code == 200 and 'ticker' in r.json()
-        except:
-            return False
+    ticker = await get_ticker_data("btcidr")
+    if ticker: await loading_msg.edit_text("✅ API Indodax beroperasi normal.", reply_markup=get_menu_keyboard())
+    else: await loading_msg.edit_text("❌ API Indodax sepertinya sedang bermasalah.", reply_markup=get_menu_keyboard())
 
-    is_ok = await asyncio.to_thread(sync_request)
-    
-    if is_ok:
-        await loading_msg.edit_text("✅ API Indodax beroperasi normal.", reply_markup=get_menu_keyboard())
-    else:
-        await loading_msg.edit_text("❌ API Indodax sepertinya sedang bermasalah.", reply_markup=get_menu_keyboard())
-
-# --- Fungsi Help ---
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = (
-        "🤖 *Bantuan Bot*\n\n"
-        "Gunakan tombol di bawah untuk navigasi. Setiap perintah akan memberikan instruksi lebih lanjut jika dibutuhkan."
-    )
+    msg = "🤖 *Bantuan Bot*\n\nGunakan tombol di bawah untuk navigasi. Setiap perintah akan memberikan instruksi lebih lanjut jika dibutuhkan."
     await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=get_menu_keyboard())
 
-# --- Setup Bot ---
+# --- Main Program ---
 def main():
     logging.info("Starting bot...")
     app = Application.builder().token(TOKEN).build()
 
-    # Daftarkan semua command handler
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("price", price))
     app.add_handler(CommandHandler("top", top))
@@ -275,18 +208,12 @@ def main():
     app.add_handler(CommandHandler("status", status))
     app.add_handler(CommandHandler("help", help_command))
     
-    # Jadwalkan pengecekan alert
     app.job_queue.run_repeating(check_alerts, interval=60, first=10)
     
-    logging.info("All handlers and jobs are set up.")
+    logging.info("Handlers and jobs are set up.")
     
-    # Jalankan keep-alive jika ada
-    try:
-        keep_alive()
-        logging.info("Keep-alive server started.")
-    except NameError:
-        pass # keep_alive tidak terdefinisi, abaikan
-
+    keep_alive() # Jalankan server web jika ada
+    
     logging.info("Bot is polling...")
     app.run_polling()
 
