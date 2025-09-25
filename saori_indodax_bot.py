@@ -50,7 +50,7 @@ VALID_PAIRS = {
     "ltcidr": "Litecoin (LTC)",
     "xrpidr": "Ripple (XRP)",
     "adaidr": "Cardano (ADA)",
-    "dogidr": "Dogecoin (DOGE)",
+    "dogeidr": "Dogecoin (DOGE)",
     "shibidr": "Shiba Inu (SHIB)",
     "maticidr": "Polygon (MATIC)"
 }
@@ -973,3 +973,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
