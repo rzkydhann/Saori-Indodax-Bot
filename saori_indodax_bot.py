@@ -93,19 +93,19 @@ async def price(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"Pair {pair.upper()} tidak valid.", reply_markup=get_menu_keyboard())
         return
 
-    loading_msg = await update.message.reply_text(f"⏳ Mengambil data {pair.upper()}...")
+    loading_msg = await update.message.reply_text(f"⏳ Mengambil data {pair.upper()}...", reply_markup=get_menu_keyboard())
     ticker = await get_ticker_data(pair)
     
     if ticker:
         last_price = f"{float(ticker['last']):,.0f}"
         msg = f"📊 *Harga {pair.upper()}*\n💰 Terakhir: Rp {last_price}"
-        await loading_msg.edit_text(msg, parse_mode="Markdown", reply_markup=get_menu_keyboard())
+        await loading_msg.edit_text(msg, parse_mode="Markdown") # DIUBAH: Hapus reply_markup
     else:
-        await loading_msg.edit_text(f"❌ Gagal mengambil data untuk {pair.upper()}.", reply_markup=get_menu_keyboard())
+        await loading_msg.edit_text(f"❌ Gagal mengambil data untuk {pair.upper()}.") # DIUBAH: Hapus reply_markup
 
 async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
     pairs = ["btcidr", "ethidr", "dogidr", "shibidr", "maticidr"]
-    loading_msg = await update.message.reply_text("⏳ Mengambil data top coins...")
+    loading_msg = await update.message.reply_text("⏳ Mengambil data top coins...", reply_markup=get_menu_keyboard())
     
     tasks = [get_ticker_data(pair) for pair in pairs]
     results = await asyncio.gather(*tasks)
@@ -122,7 +122,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if success_count == 0: msg = "❌ Gagal mengambil semua data top coin."
 
-    await loading_msg.edit_text(msg, parse_mode="Markdown", reply_markup=get_menu_keyboard())
+    await loading_msg.edit_text(msg, parse_mode="Markdown") # DIUBAH: Hapus reply_markup
 
 async def market(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
@@ -134,14 +134,13 @@ async def market(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"Pair {pair.upper()} tidak valid.", reply_markup=get_menu_keyboard())
         return
 
-    loading_msg = await update.message.reply_text(f"⏳ Mengambil market data {pair.upper()}...")
+    loading_msg = await update.message.reply_text(f"⏳ Mengambil market data {pair.upper()}...", reply_markup=get_menu_keyboard())
     ticker = await get_ticker_data(pair)
 
     if ticker:
         high = f"{float(ticker.get('high', 0)):,.0f}"
         low = f"{float(ticker.get('low', 0)):,.0f}"
 
-        # --- INI BAGIAN YANG DIPERBAIKI ---
         coin_name = pair.replace("idr", "")
         vol_key = f"vol_{coin_name}"
         vol_value = float(ticker.get(vol_key, 0))
@@ -153,9 +152,9 @@ async def market(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"📉 Terendah 24j: Rp {low}\n"
             f"📦 Volume: {vol_formatted} {coin_name.upper()}"
         )
-        await loading_msg.edit_text(msg, parse_mode="Markdown", reply_markup=get_menu_keyboard())
+        await loading_msg.edit_text(msg, parse_mode="Markdown") # DIUBAH: Hapus reply_markup
     else:
-        await loading_msg.edit_text(f"❌ Gagal mengambil market data untuk {pair.upper()}.", reply_markup=get_menu_keyboard())
+        await loading_msg.edit_text(f"❌ Gagal mengambil market data untuk {pair.upper()}.") # DIUBAH: Hapus reply_markup
         
 async def alert(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if len(context.args) < 2:
@@ -186,10 +185,10 @@ async def check_alerts(context: ContextTypes.DEFAULT_TYPE):
                     del alerts[user_id]
 
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    loading_msg = await update.message.reply_text("⏳ Cek status API Indodax...")
+    loading_msg = await update.message.reply_text("⏳ Cek status API Indodax...", reply_markup=get_menu_keyboard())
     ticker = await get_ticker_data("btcidr")
-    if ticker: await loading_msg.edit_text("✅ API Indodax beroperasi normal.", reply_markup=get_menu_keyboard())
-    else: await loading_msg.edit_text("❌ API Indodax sepertinya sedang bermasalah.", reply_markup=get_menu_keyboard())
+    if ticker: await loading_msg.edit_text("✅ API Indodax beroperasi normal.") # DIUBAH: Hapus reply_markup
+    else: await loading_msg.edit_text("❌ API Indodax sepertinya sedang bermasalah.") # DIUBAH: Hapus reply_markup
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = "🤖 *Bantuan Bot*\n\nGunakan tombol di bawah untuk navigasi. Setiap perintah akan memberikan instruksi lebih lanjut jika dibutuhkan."
@@ -212,10 +211,10 @@ def main():
     
     logging.info("Handlers and jobs are set up.")
     
-    keep_alive() # Jalankan server web jika ada
+    keep_alive()
     
     logging.info("Bot is polling...")
-    app.run_polling()
+    app.run_polling(drop_pending_updates=True) # Tambahkan ini untuk mengabaikan perintah lama saat bot baru nyala
 
 if __name__ == "__main__":
     main()
